@@ -22,7 +22,7 @@ layout (location = 2) in vec2 aTexCoord;  // Текстурные координ
 uniform vec3 cursorWorldPos; // Позиция курсора в мировых координатах
 
 out vec3 FragPos;       // Позиция фрагмента в мировом пространстве
-out vec3 Normal;        // Нормаль фрагмента
+out vec3 Normal;        // Нормаль фрагмента 
 out vec2 TexCoord;      // Текстурные координаты
 
 uniform mat4 model;
@@ -82,8 +82,18 @@ uniform sampler2D texture1;  // Основная текстура
 uniform samplerCube skybox;  // Карта отражений (skybox)
 uniform bool isMirror;
 
+#define NUM_LAMPS 3
+uniform vec3 lampPositions[NUM_LAMPS];
+uniform vec3 lampColors[NUM_LAMPS];
+uniform bool isLamp;
+
 void main() {
-    // --- Освещение по Фонгу ---
+    if (isLamp) {
+        FragColor = vec4(1.0); // Белый цвет лампочек
+        return;
+    }
+
+    // --- Освещение по Фонгу (основной прожектор) ---
     vec3 norm = normalize(Normal);
     vec3 lightDirection = normalize(lightPos - FragPos);
 
@@ -96,17 +106,36 @@ void main() {
     float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32);
 
     // Прожектор
-    float theta = dot(normalize(lightDirection), normalize(-lightDir)); // Угол между направлением света и прожектором
-    float epsilon = cutOff - outerCutOff;                    // Разница между внутренним и внешним углом
-    float intensity = clamp((theta - outerCutOff) / epsilon, 0.0, 1.0); // Интенсивность света
+    float theta = dot(normalize(lightDirection), normalize(-lightDir));
+    float epsilon = cutOff - outerCutOff;
+    float intensity = clamp((theta - outerCutOff) / epsilon, 0.0, 1.0);
 
-    // Применяем интенсивность
     vec3 ambient = 0.1 * lightColor;
     vec3 diffuse = diff * lightColor * intensity;
     vec3 specular = spec * lightColor * intensity;
 
-    // Итоговое освещение
-    vec3 phong = ambient + diffuse + specular;
+    // --- Освещение от настенных ламп ---
+    vec3 lampDiffuse = vec3(0.0);
+    vec3 lampSpecular = vec3(0.0);
+    
+    for(int i = 0; i < NUM_LAMPS; i++) {
+        // Направление к лампе и расстояние
+        vec3 lampDir = normalize(lampPositions[i] - FragPos);
+        float distance = length(lampPositions[i] - FragPos);
+        float attenuation = 1.0 / (1.0 + 0.09 * distance + 0.032 * (distance * distance));
+        
+        // Диффузная составляющая
+        float lampDiff = max(dot(norm, lampDir), 0.0);
+        lampDiffuse += lampDiff * lampColors[i] * attenuation;
+        
+        // Зеркальная составляющая
+        vec3 lampReflectDir = reflect(-lampDir, norm);
+        float lampSpec = pow(max(dot(viewDir, lampReflectDir), 0.0), 32);
+        lampSpecular += lampSpec * lampColors[i] * attenuation;
+    }
+
+    // Комбинируем все источники света
+    vec3 phong = ambient + (diffuse + specular) * intensity + lampDiffuse + lampSpecular;
 
     // --- Карта отражений ---
     vec3 I = normalize(FragPos - viewPos);
@@ -114,25 +143,26 @@ void main() {
 
     // --- Итоговый цвет ---
     vec3 textureColor = texture(texture1, TexCoord).rgb;
-    vec3 finalColor = mix(phong * textureColor, reflection, 0.1); // Смешиваем освещение и отражение
+    vec3 finalColor = mix(phong * textureColor, reflection, 0.1);
 
-if (isMirror) {
-    Ray ray;
-    ray.origin = FragPos + 0.001 * Normal;
-    ray.dir = reflect(normalize(FragPos - viewPos), normalize(Normal));
-    HitInfo hit = intersectFloor(ray);
-    if (hit.hit) {
-        vec3 hitPoint = ray.origin + ray.dir * hit.t;
-        vec3 lightDirNorm = normalize(lightPos - hitPoint);
-        float diff = max(dot(hit.normal, lightDirNorm), 0.0);
-        vec3 color = vec3(0.7, 0.7, 0.7) * diff + 0.1;
-        FragColor = vec4(color, 1.0);
-    } else {
-        FragColor = vec4(0.3, 0.5, 0.8, 1.0);
+    if (isMirror) {
+        Ray ray;
+        ray.origin = FragPos + 0.001 * Normal;
+        ray.dir = reflect(normalize(FragPos - viewPos), normalize(Normal));
+        HitInfo hit = intersectFloor(ray);
+        if (hit.hit) {
+            vec3 hitPoint = ray.origin + ray.dir * hit.t;
+            vec3 lightDirNorm = normalize(lightPos - hitPoint);
+            float diff = max(dot(hit.normal, lightDirNorm), 0.0);
+            vec3 color = vec3(0.7, 0.7, 0.7) * diff + 0.1;
+            FragColor = vec4(color, 1.0);
+        } else {
+            FragColor = vec4(0.3, 0.5, 0.8, 1.0);
+        }
+        return;
     }
-    return;
-}
-FragColor = vec4(finalColor, 1.0);
+    
+    FragColor = vec4(finalColor, 1.0);
 }
 )";
 
@@ -151,17 +181,24 @@ unsigned int floorIndices[] = {
 };
 
 float WallVertices[] = {
-	-10.0f, 0.0f, -10.0f,  0.6f, 0.6f, 0.6f,
-	 10.0f, 0.0f, -10.0f,  1.0f, 1.0f, 1.0f,
-	 10.0f, 5.0f, -10.0f,  1.0f, 1.0f, 1.0f,
-	-10.0f, 5.0f, -10.0f,  1.0f, 1.0f, 1.0f
+	// Позиции            // Нормали (Z+)   // Текстурные координаты
+	-10.0f, 0.0f, -10.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f,
+	 10.0f, 0.0f, -10.0f, 0.0f, 1.0f, 0.0f, 5.0f, 0.0f,
+	 10.0f, 5.0f, -10.0f, 0.0f, 1.0f, 0.0f, 5.0f, 1.0f,
+	-10.0f, 5.0f, -10.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f
 };
+
 
 unsigned int WallIndices[] = {
 	0, 1, 2,
 	2, 3, 0
 };
 
+std::vector<glm::vec3> lampPositions = {
+	glm::vec3(-8.0f, 3.0f, -9.8f),  // Z = -9.8 вместо -9.99
+	glm::vec3(0.0f, 3.0f, -9.8f),
+	glm::vec3(8.0f, 3.0f, -9.8f)
+};
 float cubeVertices[] = {
 	// Позиции          // Нормали
 	// Задняя грань
@@ -344,6 +381,7 @@ void checkShaderCompilation(unsigned int shader, const std::string& type) {
 
 // Глобальная переменная для текстуры пола
 unsigned int floorTexture;
+unsigned int wallTexture;
 
 // Функция для загрузки текстуры
 unsigned int loadTexture(const char* path) {
@@ -388,6 +426,11 @@ void renderFloor(unsigned int shaderProgram, unsigned int floorVAO) {
 // Рендер стены
 void renderWall(unsigned int shaderProgram, unsigned int WallVAO) {
 	glUseProgram(shaderProgram);
+
+	// Привязка текстуры стены
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, wallTexture);
+	glUniform1i(glGetUniformLocation(shaderProgram, "texture1"), 0);
 
 	glm::mat4 model = glm::mat4(1.0f);
 	unsigned int modelLoc = glGetUniformLocation(shaderProgram, "model");
@@ -586,11 +629,15 @@ int main() {
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, WallEBO);
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(WallIndices), WallIndices, GL_STATIC_DRAW);
 
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
+	// Настройка атрибутов для стен
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
 	glEnableVertexAttribArray(0);
 
-	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
+	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
 	glEnableVertexAttribArray(1);
+
+	glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float)));
+	glEnableVertexAttribArray(2);
 
 	// Настройка буферов для куба
 	unsigned int cubeVAO, cubeVBO, cubeEBO;
@@ -614,31 +661,31 @@ int main() {
 
 	glEnable(GL_DEPTH_TEST);
 
-    // Настройка буферов для полоски таймера
-    unsigned int timerBarVAO, timerBarVBO, timerBarEBO;
-    glGenVertexArrays(1, &timerBarVAO);
-    glGenBuffers(1, &timerBarVBO);
-    glGenBuffers(1, &timerBarEBO);
+	// Настройка буферов для полоски таймера
+	unsigned int timerBarVAO, timerBarVBO, timerBarEBO;
+	glGenVertexArrays(1, &timerBarVAO);
+	glGenBuffers(1, &timerBarVBO);
+	glGenBuffers(1, &timerBarEBO);
 
-    glBindVertexArray(timerBarVAO);
+	glBindVertexArray(timerBarVAO);
 
-    glBindBuffer(GL_ARRAY_BUFFER, timerBarVBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(timerBarVertices), timerBarVertices, GL_STATIC_DRAW);
+	glBindBuffer(GL_ARRAY_BUFFER, timerBarVBO);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(timerBarVertices), timerBarVertices, GL_STATIC_DRAW);
 
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, timerBarEBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(timerBarIndices), timerBarIndices, GL_STATIC_DRAW);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, timerBarEBO);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(timerBarIndices), timerBarIndices, GL_STATIC_DRAW);
 
-    // Позиции
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 9 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
+	// Позиции
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 9 * sizeof(float), (void*)0);
+	glEnableVertexAttribArray(0);
 
-    // Нормали
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 9 * sizeof(float), (void*)(3 * sizeof(float)));
-    glEnableVertexAttribArray(1);
+	// Нормали
+	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 9 * sizeof(float), (void*)(3 * sizeof(float)));
+	glEnableVertexAttribArray(1);
 
-    // Цвета
-    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 9 * sizeof(float), (void*)(6 * sizeof(float)));
-    glEnableVertexAttribArray(2);
+	// Цвета
+	glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 9 * sizeof(float), (void*)(6 * sizeof(float)));
+	glEnableVertexAttribArray(2);
 	glBufferData(GL_ARRAY_BUFFER, sizeof(timerBarVertices), timerBarVertices, GL_STATIC_DRAW);
 
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, timerBarEBO);
@@ -672,6 +719,7 @@ int main() {
 	// Генерация объектов
 	generateObjects(20);
 	floorTexture = loadTexture("floor-texture.jpg");
+	wallTexture = loadTexture("wall-texture.jpg");
 
 	while (!glfwWindowShouldClose(window)) {
 		if (!gameOver) {
@@ -733,7 +781,7 @@ int main() {
 			// Позиция света чуть спереди робота
 			glm::vec3 lightPos = robotPosition + lightDir * 0.5f;
 			glUniform3f(glGetUniformLocation(shaderProgram, "lightPos"), lightPos.x, lightPos.y, lightPos.z);
-				float cutOff = glm::cos(glm::radians(55.0f));       // Внутренний угол (12.5 градусов)
+			float cutOff = glm::cos(glm::radians(55.0f));       // Внутренний угол (12.5 градусов)
 			float outerCutOff = glm::cos(glm::radians(70.0f)); // Внешний угол (17.5 градусов)
 
 			unsigned int cutOffLoc = glGetUniformLocation(shaderProgram, "cutOff");
@@ -771,6 +819,28 @@ int main() {
 
 			// Рендер полоски таймера
 			renderTimerBar(shaderProgram, timerBarVAO, batteryLife, orthoProjection);
+
+			// Рендер лампочек
+			glUniform1i(glGetUniformLocation(shaderProgram, "isLamp"), 1);
+			for (const auto& pos : lampPositions) {
+				glm::mat4 model = glm::translate(glm::mat4(1.0f), pos);
+				model = glm::scale(model, glm::vec3(0.2f)); // Маленький размер
+				glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "model"), 1, GL_FALSE, glm::value_ptr(model));
+				glBindVertexArray(cubeVAO);
+				glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
+			}
+			glUniform1i(glGetUniformLocation(shaderProgram, "isLamp"), 0);
+
+			// В основном цикле рендеринга, перед отрисовкой объектов
+			for (int i = 0; i < lampPositions.size(); ++i) {
+				std::string posName = "lampPositions[" + std::to_string(i) + "]";
+				glUniform3f(glGetUniformLocation(shaderProgram, posName.c_str()),
+					lampPositions[i].x, lampPositions[i].y, lampPositions[i].z);
+
+				std::string colorName = "lampColors[" + std::to_string(i) + "]";
+				glUniform3f(glGetUniformLocation(shaderProgram, colorName.c_str()),
+					1.0f, 1.0f, 0.8f); // Светло-желтый цвет
+			}
 
 			glfwSwapBuffers(window);
 			glfwPollEvents();
