@@ -211,8 +211,8 @@ unsigned int floorIndices[] = {
 float WallVertices[] = {
 	// Старые координаты: 5.0f вызывали многократное повторение
 	-10.0f, 0.0f, -10.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f,
-	 10.0f, 0.0f, -10.0f, 0.0f, 1.0f, 0.0f, 2.0f, 0.0f, // Изменили 5.0f -> 2.0f
-	 10.0f, 5.0f, -10.0f, 0.0f, 1.0f, 0.0f, 2.0f, 1.0f, // Изменили 5.0f -> 2.0f
+	 10.0f, 0.0f, -10.0f, 0.0f, 1.0f, 0.0f, 2.0f, 0.0f,
+	 10.0f, 5.0f, -10.0f, 0.0f, 1.0f, 0.0f, 2.0f, 1.0f, 
 	-10.0f, 5.0f, -10.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f
 };
 
@@ -495,13 +495,14 @@ void renderRobot(unsigned int shaderProgram, unsigned int cubeVAO) {
 	glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
 }
 
-
-// Рендер объектов
+//Рендер объектов
 void renderObjects(unsigned int shaderProgram, unsigned int cubeVAO, const std::vector<glm::vec3>& objects) {
 	glUseProgram(shaderProgram);
+	float scaleFactor = 0.7f; 
 
 	for (const auto& obj : objects) {
 		glm::mat4 model = glm::translate(glm::mat4(1.0f), obj);
+		model = glm::scale(model, glm::vec3(scaleFactor)); // Добавляем масштабирование
 		unsigned int modelLoc = glGetUniformLocation(shaderProgram, "model");
 		glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
 
