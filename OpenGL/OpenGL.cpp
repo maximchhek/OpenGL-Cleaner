@@ -93,6 +93,24 @@ void main() {
         return;
     }
 
+	if (isMirror) {
+        Ray ray;
+        ray.origin = FragPos + 0.001 * Normal;
+        ray.dir = reflect(normalize(FragPos - viewPos), normalize(Normal));
+        HitInfo hit = intersectFloor(ray);
+        if (hit.hit) {
+            vec3 hitPoint = ray.origin + ray.dir * hit.t;
+            vec3 lightDirNorm = normalize(lightPos - hitPoint);
+            float diff = max(dot(hit.normal, lightDirNorm), 0.0);
+            vec3 color = vec3(0.7, 0.7, 0.7) * diff + 0.1;
+            FragColor = vec4(color, 1.0);
+        } else {
+            FragColor = vec4(0.3, 0.5, 0.8, 1.0);
+        }
+        return;
+    }
+    
+
     // --- Освещение по Фонгу (основной прожектор) ---
     vec3 norm = normalize(Normal);
     vec3 lightDirection = normalize(lightPos - FragPos);
@@ -122,16 +140,16 @@ void main() {
         // Направление к лампе и расстояние
         vec3 lampDir = normalize(lampPositions[i] - FragPos);
         float distance = length(lampPositions[i] - FragPos);
-        float attenuation = 1.0 / (1.0 + 0.09 * distance + 0.032 * (distance * distance));
+		float attenuation = 1.0 / (1.0 + 0.1 * distance + 0.05 * (distance * distance));
         
         // Диффузная составляющая
         float lampDiff = max(dot(norm, lampDir), 0.0);
-        lampDiffuse += lampDiff * lampColors[i] * attenuation;
+        lampDiffuse += lampDiff * lampColors[i] * attenuation * 1.0;
         
         // Зеркальная составляющая
         vec3 lampReflectDir = reflect(-lampDir, norm);
         float lampSpec = pow(max(dot(viewDir, lampReflectDir), 0.0), 32);
-        lampSpecular += lampSpec * lampColors[i] * attenuation;
+        lampSpecular += lampSpec * lampColors[i] * attenuation * 0.5;
     }
 
     // Комбинируем все источники света
@@ -143,26 +161,10 @@ void main() {
 
     // --- Итоговый цвет ---
     vec3 textureColor = texture(texture1, TexCoord).rgb;
-    vec3 finalColor = mix(phong * textureColor, reflection, 0.1);
+    vec3 finalColor = mix(phong * textureColor, reflection * 1.5, 0.1);
 
-    if (isMirror) {
-        Ray ray;
-        ray.origin = FragPos + 0.001 * Normal;
-        ray.dir = reflect(normalize(FragPos - viewPos), normalize(Normal));
-        HitInfo hit = intersectFloor(ray);
-        if (hit.hit) {
-            vec3 hitPoint = ray.origin + ray.dir * hit.t;
-            vec3 lightDirNorm = normalize(lightPos - hitPoint);
-            float diff = max(dot(hit.normal, lightDirNorm), 0.0);
-            vec3 color = vec3(0.7, 0.7, 0.7) * diff + 0.1;
-            FragColor = vec4(color, 1.0);
-        } else {
-            FragColor = vec4(0.3, 0.5, 0.8, 1.0);
-        }
-        return;
-    }
-    
     FragColor = vec4(finalColor, 1.0);
+
 }
 )";
 
@@ -188,7 +190,7 @@ in vec3 Color;
 out vec4 FragColor;
 
 void main() {
-    FragColor = vec4(Color, 1.0);
+    FragColor = vec4(Color, 0.5);
 }
 )";
 
@@ -207,13 +209,12 @@ unsigned int floorIndices[] = {
 };
 
 float WallVertices[] = {
-	// Позиции            // Нормали (Z+)   // Текстурные координаты
+	// Старые координаты: 5.0f вызывали многократное повторение
 	-10.0f, 0.0f, -10.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f,
-	 10.0f, 0.0f, -10.0f, 0.0f, 1.0f, 0.0f, 5.0f, 0.0f,
-	 10.0f, 5.0f, -10.0f, 0.0f, 1.0f, 0.0f, 5.0f, 1.0f,
+	 10.0f, 0.0f, -10.0f, 0.0f, 1.0f, 0.0f, 2.0f, 0.0f, // Изменили 5.0f -> 2.0f
+	 10.0f, 5.0f, -10.0f, 0.0f, 1.0f, 0.0f, 2.0f, 1.0f, // Изменили 5.0f -> 2.0f
 	-10.0f, 5.0f, -10.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f
 };
-
 
 unsigned int WallIndices[] = {
 	0, 1, 2,
@@ -278,8 +279,8 @@ float timerBarVertices[] = {
 	// Позиции           // Цвета (R, G, B)
 	-0.9f,  0.9f, 0.0f,  0.0f, 1.0f, 0.0f, // Левый верх
 	 0.9f,  0.9f, 0.0f,  0.0f, 1.0f, 0.0f, // Правый верх
-	 0.9f,  0.85f, 0.0f, 1.0f, 0.0f, 0.0f, // Правый низ
-	-0.9f,  0.85f, 0.0f, 1.0f, 0.0f, 0.0f  // Левый низ
+	 0.9f,  0.85f, 0.0f, 0.0f, 1.0f, 0.0f, // Правый низ
+	-0.9f,  0.85f, 0.0f, 0.0f, 1.0f, 0.0f  // Левый низ
 };
 
 unsigned int timerBarIndices[] = {
@@ -414,23 +415,36 @@ unsigned int loadTexture(const char* path) {
 	glGenTextures(1, &textureID);
 	glBindTexture(GL_TEXTURE_2D, textureID);
 
-	// Настройка параметров текстуры
+	// Параметры фильтрации и повторения текстуры
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-	// Загрузка изображения
+	// Загрузка изображения с помощью stb_image
 	int width, height, nrChannels;
+	stbi_set_flip_vertically_on_load(true); // Переворачиваем изображение по вертикали
 	unsigned char* data = stbi_load(path, &width, &height, &nrChannels, 0);
+
 	if (data) {
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
+		// Определяем формат цветовых каналов
+		GLenum format = GL_RGB;
+		if (nrChannels == 1)
+			format = GL_RED;
+		else if (nrChannels == 3)
+			format = GL_RGB;
+		else if (nrChannels == 4)
+			format = GL_RGBA;
+
+		// Загружаем данные в текстуру
+		glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
 		glGenerateMipmap(GL_TEXTURE_2D);
 	}
 	else {
 		std::cerr << "Failed to load texture: " << path << std::endl;
 	}
-	stbi_image_free(data);
+
+	stbi_image_free(data); // Освобождаем память
 
 	return textureID;
 }
@@ -867,6 +881,8 @@ int main() {
 			// Рендер полоски таймера
 			renderTimerBar(uiShaderProgram, timerBarVAO, batteryLife, orthoProjection);
 
+
+			glUseProgram(shaderProgram);
 			// В основном цикле рендеринга, перед отрисовкой объектов
 			for (int i = 0; i < lampPositions.size(); ++i) {
 				std::string posName = "lampPositions[" + std::to_string(i) + "]";
@@ -874,8 +890,7 @@ int main() {
 					lampPositions[i].x, lampPositions[i].y, lampPositions[i].z);
 
 				std::string colorName = "lampColors[" + std::to_string(i) + "]";
-				glUniform3f(glGetUniformLocation(shaderProgram, colorName.c_str()),
-					1.0f, 1.0f, 0.8f); // Светло-желтый цвет
+				glUniform3f(glGetUniformLocation(shaderProgram, colorName.c_str()), 0.8f, 0.7f, 0.6f);
 			}
 
 			glfwSwapBuffers(window);
