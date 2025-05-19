@@ -166,6 +166,32 @@ void main() {
 }
 )";
 
+const char* uiVertexShaderSource = R"(
+#version 330 core
+layout (location = 0) in vec3 aPos;
+layout (location = 1) in vec3 aColor;
+
+out vec3 Color;
+
+uniform mat4 projection;
+uniform mat4 model;
+
+void main() {
+    Color = aColor;
+    gl_Position = projection * model * vec4(aPos, 1.0);
+}
+)";
+
+const char* uiFragmentShaderSource = R"(
+#version 330 core
+in vec3 Color;
+out vec4 FragColor;
+
+void main() {
+    FragColor = vec4(Color, 1.0);
+}
+)";
+
 // Вершины для пола
 float floorVertices[] = {
 	// Позиции           // Нормали         // Текстуры
@@ -249,18 +275,17 @@ unsigned int cubeIndices[] = {
 };
 
 float timerBarVertices[] = {
-	// Позиции         // Нормали         // Цвета
-	-0.9f,  0.9f, 0.0f,  0.0f, 0.0f, 1.0f,  0.0f, 1.0f, 0.0f, // Левый верхний угол
-	 0.9f,  0.9f, 0.0f,  0.0f, 0.0f, 1.0f,  0.0f, 1.0f, 0.0f, // Правый верхний угол
-	 0.9f,  0.85f, 0.0f, 0.0f, 0.0f, 1.0f,  0.0f, 1.0f, 0.0f, // Правый нижний угол
-	-0.9f,  0.85f, 0.0f, 0.0f, 0.0f, 1.0f,  0.0f, 1.0f, 0.0f  // Левый нижний угол
+	// Позиции           // Цвета (R, G, B)
+	-0.9f,  0.9f, 0.0f,  0.0f, 1.0f, 0.0f, // Левый верх
+	 0.9f,  0.9f, 0.0f,  0.0f, 1.0f, 0.0f, // Правый верх
+	 0.9f,  0.85f, 0.0f, 1.0f, 0.0f, 0.0f, // Правый низ
+	-0.9f,  0.85f, 0.0f, 1.0f, 0.0f, 0.0f  // Левый низ
 };
 
 unsigned int timerBarIndices[] = {
 	0, 1, 2,
 	2, 3, 0
 };
-
 // Вершины для зеркала (размер 4x2, центр на стене)
 float mirrorVertices[] = {
 	// Позиции           // Нормали         // Текстуры
@@ -518,25 +543,28 @@ unsigned int loadCubemap(std::vector<std::string> faces) {
 	return textureID;
 }
 
-void renderTimerBar(unsigned int shaderProgram, unsigned int timerBarVAO, float batteryLife, const glm::mat4& orthoProjection) {
-	glUseProgram(shaderProgram);
+void renderTimerBar(unsigned int uiShaderProgram, unsigned int timerBarVAO, float batteryLife, const glm::mat4& orthoProjection) {
+	glUseProgram(uiShaderProgram);
 
-	// Устанавливаем ортографическую проекцию
-	unsigned int projLoc = glGetUniformLocation(shaderProgram, "projection");
-	glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(orthoProjection));
+	// Отключаем тест глубины и включаем blending
+	glDisable(GL_DEPTH_TEST);
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-	// Матрица модели для полоски таймера
+	// Устанавливаем проекцию
+	glUniformMatrix4fv(glGetUniformLocation(uiShaderProgram, "projection"), 1, GL_FALSE, glm::value_ptr(orthoProjection));
+
+	// Масштабирование по оси X
 	glm::mat4 model = glm::scale(glm::mat4(1.0f), glm::vec3(batteryLife / 100.0f, 1.0f, 1.0f));
-	unsigned int modelLoc = glGetUniformLocation(shaderProgram, "model");
-	glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+	glUniformMatrix4fv(glGetUniformLocation(uiShaderProgram, "model"), 1, GL_FALSE, glm::value_ptr(model));
 
-	// Матрица вида (единичная матрица)
-	unsigned int viewLoc = glGetUniformLocation(shaderProgram, "view");
-	glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(glm::mat4(1.0f)));
-
-	// Рендер полоски таймера
+	// Рендер
 	glBindVertexArray(timerBarVAO);
 	glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+	// Восстанавливаем настройки
+	glDisable(GL_BLEND);
+	glEnable(GL_DEPTH_TEST);
 }
 
 void renderMirror(unsigned int shaderProgram, unsigned int mirrorVAO) {
@@ -675,21 +703,29 @@ int main() {
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, timerBarEBO);
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(timerBarIndices), timerBarIndices, GL_STATIC_DRAW);
 
-	// Позиции
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 9 * sizeof(float), (void*)0);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
 	glEnableVertexAttribArray(0);
 
-	// Нормали
-	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 9 * sizeof(float), (void*)(3 * sizeof(float)));
+	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
 	glEnableVertexAttribArray(1);
 
-	// Цвета
-	glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 9 * sizeof(float), (void*)(6 * sizeof(float)));
-	glEnableVertexAttribArray(2);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(timerBarVertices), timerBarVertices, GL_STATIC_DRAW);
+	// Создаем UI шейдерную программу для таймбара
+	unsigned int uiVertexShader = glCreateShader(GL_VERTEX_SHADER);
+	glShaderSource(uiVertexShader, 1, &uiVertexShaderSource, NULL);
+	glCompileShader(uiVertexShader);
 
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, timerBarEBO);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(timerBarIndices), timerBarIndices, GL_STATIC_DRAW);
+	unsigned int uiFragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+	glShaderSource(uiFragmentShader, 1, &uiFragmentShaderSource, NULL);
+	glCompileShader(uiFragmentShader);
+
+	unsigned int uiShaderProgram = glCreateProgram();
+	glAttachShader(uiShaderProgram, uiVertexShader);
+	glAttachShader(uiShaderProgram, uiFragmentShader);
+	glLinkProgram(uiShaderProgram);
+
+	// Удаляем шейдеры после линковки
+	glDeleteShader(uiVertexShader);
+	glDeleteShader(uiFragmentShader);
 
 	// Настройка буферов для зеркала
 	unsigned int mirrorVAO, mirrorVBO, mirrorEBO;
@@ -817,9 +853,6 @@ int main() {
 			// Ортографическая проекция для UI
 			glm::mat4 orthoProjection = glm::ortho(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f);
 
-			// Рендер полоски таймера
-			renderTimerBar(shaderProgram, timerBarVAO, batteryLife, orthoProjection);
-
 			// Рендер лампочек
 			glUniform1i(glGetUniformLocation(shaderProgram, "isLamp"), 1);
 			for (const auto& pos : lampPositions) {
@@ -830,6 +863,9 @@ int main() {
 				glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
 			}
 			glUniform1i(glGetUniformLocation(shaderProgram, "isLamp"), 0);
+
+			// Рендер полоски таймера
+			renderTimerBar(uiShaderProgram, timerBarVAO, batteryLife, orthoProjection);
 
 			// В основном цикле рендеринга, перед отрисовкой объектов
 			for (int i = 0; i < lampPositions.size(); ++i) {
