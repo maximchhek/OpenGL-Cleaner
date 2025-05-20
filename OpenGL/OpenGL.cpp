@@ -19,7 +19,7 @@ const char* vertexShaderSource = R"(
 layout (location = 0) in vec3 aPos;       // Позиция вершины
 layout (location = 1) in vec3 aNormal;    // Нормаль вершины
 layout (location = 2) in vec2 aTexCoord;  // Текстурные координаты
-uniform vec3 cursorWorldPos; // Позиция курсора в мировых координатах
+uniform vec3 cursorWorldPos; 
 
 out vec3 FragPos;       // Позиция фрагмента в мировом пространстве
 out vec3 Normal;        // Нормаль фрагмента 
@@ -30,8 +30,8 @@ uniform mat4 view;
 uniform mat4 projection;
 
 void main() {
-    FragPos = vec3(model * vec4(aPos, 1.0)); // Позиция фрагмента в мировом пространстве
-    Normal = mat3(transpose(inverse(model))) * aNormal; // Трансформируем нормаль
+    FragPos = vec3(model * vec4(aPos, 1.0));
+    Normal = mat3(transpose(inverse(model))) * aNormal;
     TexCoord = aTexCoord;
 
     gl_Position = projection * view * vec4(FragPos, 1.0);
@@ -75,11 +75,11 @@ uniform vec3 lightPos;     // Позиция источника света
 uniform vec3 viewPos;      // Позиция камеры
 uniform vec3 lightColor;   // Цвет света
 uniform vec3 lightDir;     // Направление света
-uniform float cutOff;      // Внутренний угол отсечения (косинус угла)
-uniform float outerCutOff; // Внешний угол отсечения (косинус угла)
+uniform float cutOff;      // Внутренний угол отсечения
+uniform float outerCutOff; // Внешний угол отсечения 
 
 uniform sampler2D texture1;  // Основная текстура
-uniform samplerCube skybox;  // Карта отражений (skybox)
+uniform samplerCube skybox;  // Карта отражений 
 uniform bool isMirror;
 
 #define NUM_LAMPS 3
@@ -89,7 +89,7 @@ uniform bool isLamp;
 
 void main() {
     if (isLamp) {
-        FragColor = vec4(1.0); // Белый цвет лампочек
+        FragColor = vec4(1.0);
         return;
     }
 
@@ -111,7 +111,7 @@ void main() {
     }
     
 
-    // --- Освещение по Фонгу (основной прожектор) ---
+    // Освещение по Фонгу (основной прожектор)
     vec3 norm = normalize(Normal);
     vec3 lightDirection = normalize(lightPos - FragPos);
 
@@ -132,34 +132,30 @@ void main() {
     vec3 diffuse = diff * lightColor * intensity;
     vec3 specular = spec * lightColor * intensity;
 
-    // --- Освещение от настенных ламп ---
+    //Освещение от настенных ламп
     vec3 lampDiffuse = vec3(0.0);
     vec3 lampSpecular = vec3(0.0);
     
     for(int i = 0; i < NUM_LAMPS; i++) {
-        // Направление к лампе и расстояние
         vec3 lampDir = normalize(lampPositions[i] - FragPos);
         float distance = length(lampPositions[i] - FragPos);
 		float attenuation = 1.0 / (1.0 + 0.1 * distance + 0.05 * (distance * distance));
         
-        // Диффузная составляющая
         float lampDiff = max(dot(norm, lampDir), 0.0);
         lampDiffuse += lampDiff * lampColors[i] * attenuation * 1.0;
         
-        // Зеркальная составляющая
         vec3 lampReflectDir = reflect(-lampDir, norm);
         float lampSpec = pow(max(dot(viewDir, lampReflectDir), 0.0), 32);
         lampSpecular += lampSpec * lampColors[i] * attenuation * 0.5;
     }
 
-    // Комбинируем все источники света
     vec3 phong = ambient + (diffuse + specular) * intensity + lampDiffuse + lampSpecular;
 
-    // --- Карта отражений ---
+    // Карта отражений
     vec3 I = normalize(FragPos - viewPos);
     vec3 reflection = texture(skybox, reflect(I, norm)).rgb;
 
-    // --- Итоговый цвет ---
+    // Итоговый цвет
     vec3 textureColor = texture(texture1, TexCoord).rgb;
     vec3 finalColor = mix(phong * textureColor, reflection * 1.5, 0.1);
 
@@ -222,7 +218,7 @@ unsigned int WallIndices[] = {
 };
 
 std::vector<glm::vec3> lampPositions = {
-	glm::vec3(-8.0f, 3.0f, -9.8f),  // Z = -9.8 вместо -9.99
+	glm::vec3(-8.0f, 3.0f, -9.8f), 
 	glm::vec3(0.0f, 3.0f, -9.8f),
 	glm::vec3(8.0f, 3.0f, -9.8f)
 };
@@ -287,7 +283,7 @@ unsigned int timerBarIndices[] = {
 	0, 1, 2,
 	2, 3, 0
 };
-// Вершины для зеркала (размер 4x2, центр на стене)
+
 float mirrorVertices[] = {
 	// Позиции           // Нормали         // Текстуры
 	-2.0f, 1.0f, -9.99f,  0.0f, 0.0f, 1.0f,  0.0f, 0.0f,
@@ -319,7 +315,7 @@ float batteryLife = 100.0f; // Заряд батареи (в процентах)
 void generateObjects(int count) {
 	srand(static_cast<unsigned int>(time(0)));
 	for (int i = 0; i < count; ++i) {
-		float x = static_cast<float>(rand() % 18 - 9); // Уменьшено, чтобы объекты не касались стен
+		float x = static_cast<float>(rand() % 18 - 9);
 		float z = static_cast<float>(rand() % 18 - 9);
 		objects.push_back(glm::vec3(x, 0.2f, z));
 	}
@@ -338,42 +334,38 @@ void checkCollisions() {
 	}
 }
 
-glm::vec3 robotDirection(0.0f, 0.0f, -1.0f); // Начальное направление (вперёд по оси Z)
-const float robotSpeed = 0.05f; // Скорость движения
+glm::vec3 robotDirection(0.0f, 0.0f, -1.0f); 
+const float robotSpeed = 0.05f; 
 
 // Обработка ввода
 void processInput(GLFWwindow* window) {
-	const float rotationSpeed = glm::radians(1.0f); // Скорость поворота (в радианах)
+	const float rotationSpeed = glm::radians(1.0f);
 
 	if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
-		// Поворот влево
 		float angle = rotationSpeed;
 		glm::mat4 rotation = glm::rotate(glm::mat4(1.0f), angle, glm::vec3(0.0f, 1.0f, 0.0f));
 		robotDirection = glm::vec3(rotation * glm::vec4(robotDirection, 0.0f));
 	}
 
 	if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
-		// Поворот вправо
 		float angle = -rotationSpeed;
 		glm::mat4 rotation = glm::rotate(glm::mat4(1.0f), angle, glm::vec3(0.0f, 1.0f, 0.0f));
 		robotDirection = glm::vec3(rotation * glm::vec4(robotDirection, 0.0f));
 	}
 
 	if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
-		// Движение вперёд
 		robotPosition += robotDirection * robotSpeed;
 	}
 
 	if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
-		// Движение назад
 		robotPosition -= robotDirection * robotSpeed;
 	}
-	// Проверка границ
+
 	if (robotPosition.x < -9.0f) robotPosition.x = -9.0f;
 	if (robotPosition.x > 9.0f) robotPosition.x = 9.0f;
 	if (robotPosition.z < -9.0f) robotPosition.z = -9.0f;
 	if (robotPosition.z > 9.0f) robotPosition.z = 9.0f;
-	// Проверка столкновений с объектами
+
 	checkCollisions();
 }
 
@@ -415,7 +407,6 @@ unsigned int loadTexture(const char* path) {
 	glGenTextures(1, &textureID);
 	glBindTexture(GL_TEXTURE_2D, textureID);
 
-	// Параметры фильтрации и повторения текстуры
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
@@ -423,11 +414,10 @@ unsigned int loadTexture(const char* path) {
 
 	// Загрузка изображения с помощью stb_image
 	int width, height, nrChannels;
-	stbi_set_flip_vertically_on_load(true); // Переворачиваем изображение по вертикали
+	stbi_set_flip_vertically_on_load(true); 
 	unsigned char* data = stbi_load(path, &width, &height, &nrChannels, 0);
 
 	if (data) {
-		// Определяем формат цветовых каналов
 		GLenum format = GL_RGB;
 		if (nrChannels == 1)
 			format = GL_RED;
@@ -436,7 +426,6 @@ unsigned int loadTexture(const char* path) {
 		else if (nrChannels == 4)
 			format = GL_RGBA;
 
-		// Загружаем данные в текстуру
 		glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
 		glGenerateMipmap(GL_TEXTURE_2D);
 	}
@@ -444,7 +433,7 @@ unsigned int loadTexture(const char* path) {
 		std::cerr << "Failed to load texture: " << path << std::endl;
 	}
 
-	stbi_image_free(data); // Освобождаем память
+	stbi_image_free(data);
 
 	return textureID;
 }
@@ -458,7 +447,7 @@ void renderFloor(unsigned int shaderProgram, unsigned int floorVAO) {
 	glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
 
 	glBindVertexArray(floorVAO);
-	glBindTexture(GL_TEXTURE_2D, floorTexture); // Привязка текстуры пола
+	glBindTexture(GL_TEXTURE_2D, floorTexture);
 	glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 }
 
@@ -466,7 +455,6 @@ void renderFloor(unsigned int shaderProgram, unsigned int floorVAO) {
 void renderWall(unsigned int shaderProgram, unsigned int WallVAO) {
 	glUseProgram(shaderProgram);
 
-	// Привязка текстуры стены
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, wallTexture);
 	glUniform1i(glGetUniformLocation(shaderProgram, "texture1"), 0);
@@ -483,10 +471,9 @@ void renderWall(unsigned int shaderProgram, unsigned int WallVAO) {
 void renderRobot(unsigned int shaderProgram, unsigned int cubeVAO) {
 	glUseProgram(shaderProgram);
 
-	// Матрица модели с учётом позиции и поворота
 	glm::mat4 model = glm::translate(glm::mat4(1.0f), robotPosition);
-	float angle = glm::atan(robotDirection.x, robotDirection.z); // Угол поворота вокруг оси Y
-	model = glm::rotate(model, angle, glm::vec3(0.0f, 1.0f, 0.0f)); // Поворот вокруг оси Y
+	float angle = glm::atan(robotDirection.x, robotDirection.z); 
+	model = glm::rotate(model, angle, glm::vec3(0.0f, 1.0f, 0.0f)); 
 
 	unsigned int modelLoc = glGetUniformLocation(shaderProgram, "model");
 	glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
@@ -502,7 +489,7 @@ void renderObjects(unsigned int shaderProgram, unsigned int cubeVAO, const std::
 
 	for (const auto& obj : objects) {
 		glm::mat4 model = glm::translate(glm::mat4(1.0f), obj);
-		model = glm::scale(model, glm::vec3(scaleFactor)); // Добавляем масштабирование
+		model = glm::scale(model, glm::vec3(scaleFactor)); 
 		unsigned int modelLoc = glGetUniformLocation(shaderProgram, "model");
 		glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
 
@@ -514,21 +501,17 @@ void renderObjects(unsigned int shaderProgram, unsigned int cubeVAO, const std::
 void renderGameOverText(unsigned int shaderProgram, const std::string& message, const glm::mat4& orthoProjection) {
 	glUseProgram(shaderProgram);
 
-	// Устанавливаем ортографическую проекцию
 	unsigned int projLoc = glGetUniformLocation(shaderProgram, "projection");
 	glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(orthoProjection));
 
-	// Матрица модели для текста
 	glm::mat4 model = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, 0.0f));
 	unsigned int modelLoc = glGetUniformLocation(shaderProgram, "model");
 	glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
 
-	// Отключаем матрицу вида (единичная матрица)
 	unsigned int viewLoc = glGetUniformLocation(shaderProgram, "view");
 	glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(glm::mat4(1.0f)));
 
-	// Здесь можно использовать библиотеку для рендеринга текста (например, FreeType)
-	// В данном случае просто выводим сообщение в консоль
+
 	std::cout << message << std::endl;
 }
 
@@ -561,23 +544,18 @@ unsigned int loadCubemap(std::vector<std::string> faces) {
 void renderTimerBar(unsigned int uiShaderProgram, unsigned int timerBarVAO, float batteryLife, const glm::mat4& orthoProjection) {
 	glUseProgram(uiShaderProgram);
 
-	// Отключаем тест глубины и включаем blending
 	glDisable(GL_DEPTH_TEST);
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-	// Устанавливаем проекцию
 	glUniformMatrix4fv(glGetUniformLocation(uiShaderProgram, "projection"), 1, GL_FALSE, glm::value_ptr(orthoProjection));
 
-	// Масштабирование по оси X
 	glm::mat4 model = glm::scale(glm::mat4(1.0f), glm::vec3(batteryLife / 100.0f, 1.0f, 1.0f));
 	glUniformMatrix4fv(glGetUniformLocation(uiShaderProgram, "model"), 1, GL_FALSE, glm::value_ptr(model));
 
-	// Рендер
 	glBindVertexArray(timerBarVAO);
 	glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
-	// Восстанавливаем настройки
 	glDisable(GL_BLEND);
 	glEnable(GL_DEPTH_TEST);
 }
@@ -696,10 +674,10 @@ int main() {
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, cubeEBO);
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(cubeIndices), cubeIndices, GL_STATIC_DRAW);
 
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0); // Позиции
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
 	glEnableVertexAttribArray(0);
 
-	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float))); // Нормали
+	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float))); 
 	glEnableVertexAttribArray(1);
 
 	glEnable(GL_DEPTH_TEST);
@@ -784,8 +762,8 @@ int main() {
 			}
 
 			// Обновление позиции камеры
-			float cameraDistance = 5.0f; // Расстояние позади робота
-			float cameraHeight = 10.0f;   // Высота камеры над роботом
+			float cameraDistance = 5.0f;
+			float cameraHeight = 10.0f; 
 			cameraPosition = robotPosition - robotDirection * cameraDistance + glm::vec3(0.0f, cameraHeight, 0.0f);
 
 			// Обновление направления взгляда камеры
@@ -832,8 +810,8 @@ int main() {
 			// Позиция света чуть спереди робота
 			glm::vec3 lightPos = robotPosition + lightDir * 0.5f;
 			glUniform3f(glGetUniformLocation(shaderProgram, "lightPos"), lightPos.x, lightPos.y, lightPos.z);
-			float cutOff = glm::cos(glm::radians(55.0f));       // Внутренний угол (12.5 градусов)
-			float outerCutOff = glm::cos(glm::radians(70.0f)); // Внешний угол (17.5 градусов)
+			float cutOff = glm::cos(glm::radians(55.0f));
+			float outerCutOff = glm::cos(glm::radians(70.0f)); 
 
 			unsigned int cutOffLoc = glGetUniformLocation(shaderProgram, "cutOff");
 			glUniform1f(cutOffLoc, cutOff);
@@ -846,7 +824,7 @@ int main() {
 			glUniform3f(viewPosLoc, cameraPosition.x, cameraPosition.y, cameraPosition.z);
 
 			unsigned int lightColorLoc = glGetUniformLocation(shaderProgram, "lightColor");
-			glUniform3f(lightColorLoc, 1.0f, 1.0f, 1.0f); // Белый свет
+			glUniform3f(lightColorLoc, 1.0f, 1.0f, 1.0f);
 
 			// Рендер пола
 			renderFloor(shaderProgram, floorVAO);
@@ -872,7 +850,7 @@ int main() {
 			glUniform1i(glGetUniformLocation(shaderProgram, "isLamp"), 1);
 			for (const auto& pos : lampPositions) {
 				glm::mat4 model = glm::translate(glm::mat4(1.0f), pos);
-				model = glm::scale(model, glm::vec3(0.2f)); // Маленький размер
+				model = glm::scale(model, glm::vec3(0.2f)); 
 				glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "model"), 1, GL_FALSE, glm::value_ptr(model));
 				glBindVertexArray(cubeVAO);
 				glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
@@ -884,7 +862,6 @@ int main() {
 
 
 			glUseProgram(shaderProgram);
-			// В основном цикле рендеринга, перед отрисовкой объектов
 			for (int i = 0; i < lampPositions.size(); ++i) {
 				std::string posName = "lampPositions[" + std::to_string(i) + "]";
 				glUniform3f(glGetUniformLocation(shaderProgram, posName.c_str()),
